@@ -1,0 +1,9 @@
+[project]
+name = "rag-memo"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "langchain-cli>=0.0.37",
+]
