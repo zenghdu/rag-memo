@@ -1,9 +1,15 @@
-[tool.poetry]
-name = "my-project"
+[project]
+name = "rag-memo"
 version = "0.1.0"
 description = ""
-authors = ["jin"]
-
-[build-system]
-requires = ["poetry-core>=1.1.0"]
-build-backend = "poetry.core.masonry.api"
+authors = [{name = "jin"}]
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.135.2",
+    "langchain>=1.2.13",
+    "langchain-core>=1.2.22",
+    "langserve>=0.3.3",
+    "pydantic-settings>=2.13.1",
+    "sse-starlette>=3.3.3",
+    "uvicorn>=0.42.0",
+]
