@@ -7,7 +7,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import unittest
 from app.core.config import settings, DATA_DIR
-from app.services.pipeline_service import PipelineService
+from app.services.pipeline import PipelineService
 from app.db.mysql import init_db
 from app.utils.logger import console
 

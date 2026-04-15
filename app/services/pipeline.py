@@ -16,13 +16,13 @@ from app.utils.logger import (
 )
 
 # 模块引入
-from app.modules.loader import Loader
-from app.modules.chunker import Chunker
-from app.modules.embedder import Embedder
-from app.modules.retriever import Retriever
-from app.modules.reranker import Reranker
-from app.modules.context import ContextBuilder
-from app.services.rag_chain import get_llm
+from app.services.loader import Loader
+from app.services.chunker import Chunker
+from app.services.embedder import Embedder
+from app.services.retriever import Retriever
+from app.services.reranker import Reranker
+from app.services.context import ContextBuilder
+from app.utils.llm import get_llm
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 

@@ -5,7 +5,7 @@ from langchain_milvus import Milvus
 
 import app.db.milvus  # noqa: F401  兼容性补丁
 from app.core.config import settings
-from app.services.embeddings import get_embeddings
+from app.utils.embeddings import get_embeddings
 from app.utils.logger import logger
 
 class Embedder:

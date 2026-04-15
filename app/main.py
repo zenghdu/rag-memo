@@ -14,8 +14,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import UPLOAD_DIR, DATA_DIR, settings
 from app.db.mysql import get_db, init_db
-from app.services.pipeline_service import PipelineService
-from app.modules.loader import SUPPORTED_EXTS
+from app.services.pipeline import PipelineService
+from app.services.loader import SUPPORTED_EXTS
 
 # ═══════════════════════════════════════
 # FastAPI App
