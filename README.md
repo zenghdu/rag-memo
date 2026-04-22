@@ -9,23 +9,22 @@ app/
 ├── core/
 │   ├── config.py              # 全局配置 (.env)
 │   └── models.py              # MySQL ORM 模型 (文档/切片/流水线记录)
-├── modules/                   # ⭐ 六大可插拔模块
-│   ├── loader.py              # 文档加载 (PDF/图片/文本)
-│   ├── chunker.py             # 文本切片 (递归切分)
-│   ├── embedder.py            # 向量化 + Milvus 入库 (HNSW)
-│   ├── retriever.py           # 向量召回 (HNSW + COSINE)
-│   ├── reranker.py            # 重排序 (Qwen3-Reranker-8B)
-│   └── context.py             # 上下文工程 (格式化/截断)
 ├── db/
 │   ├── milvus.py              # Milvus 兼容性补丁
 │   └── mysql.py               # MySQL 连接管理
-├── services/
-│   ├── embeddings.py          # Embedding 模型工厂
-│   ├── rag_chain.py           # LLM 工厂
-│   └── pipeline_service.py    # 流水线编排器 (串联所有模块)
+├── services/                  # ⭐ 六大可插拔模块及流水线编排
+│   ├── chunker.py             # 文本切片 (递归切分)
+│   ├── context.py             # 上下文工程 (格式化/截断)
+│   ├── embedder.py            # 向量化 + Milvus 入库 (HNSW)
+│   ├── loader.py              # 文档加载 (PDF/图片/文本)
+│   ├── pipeline.py            # 流水线编排器 (串联所有模块)
+│   ├── reranker.py            # 重排序 (Qwen3-Reranker-8B)
+│   └── retriever.py           # 向量召回 (HNSW + COSINE)
 ├── schemas/
 │   └── __init__.py            # Pydantic 数据模型
 ├── utils/
+│   ├── embeddings.py          # Embedding 模型工厂
+│   ├── llm.py                 # LLM 客户端
 │   ├── logger.py              # Rich 终端可视化 + Debug 开关
 │   └── ocr.py                 # RapidOCR 文字识别
 ├── data/                      # 文档存放目录
@@ -98,7 +97,7 @@ uv run python -m app.main
 
 ```bash
 # 运行模块化流水线测试
-uv run python tests/reconstruction/test_modular_pipeline.py
+uv run pytest tests/test_pipeline.py
 ```
 
 ## API 接口
