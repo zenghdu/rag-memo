@@ -45,26 +45,20 @@ class MilvusVectorStore:
 
     @property
     def index_params(self) -> Dict[str, Any]:
-        metric_type = getattr(settings, "milvus_metric_type", "COSINE")
-        index_type = getattr(settings, "milvus_index_type", "HNSW")
-        hnsw_m = getattr(settings, "hnsw_m", 16)
-        ef_construction = getattr(settings, "hnsw_ef_construction", 256)
         return {
-            "metric_type": metric_type,
-            "index_type": index_type,
+            "metric_type": settings.milvus_metric_type,
+            "index_type": settings.milvus_index_type,
             "params": {
-                "M": hnsw_m,
-                "efConstruction": ef_construction,
+                "M": settings.hnsw_m,
+                "efConstruction": settings.hnsw_ef_construction,
             },
         }
 
     @property
     def search_params(self) -> Dict[str, Any]:
-        metric_type = getattr(settings, "milvus_metric_type", "COSINE")
-        ef_search = getattr(settings, "hnsw_ef_search", 128)
         return {
-            "metric_type": metric_type,
-            "params": {"ef": ef_search},
+            "metric_type": settings.milvus_metric_type,
+            "params": {"ef": settings.hnsw_ef_search},
         }
 
     def ensure_collection(self) -> Collection:
@@ -87,7 +81,7 @@ class MilvusVectorStore:
             FieldSchema(
                 name=VECTOR_FIELD,
                 dtype=DataType.FLOAT_VECTOR,
-                dim=getattr(settings, "milvus_vector_dim", 1024),
+                dim=settings.milvus_vector_dim,
             ),
         ]
         schema = CollectionSchema(fields=fields, description="RAG Memo chunks")

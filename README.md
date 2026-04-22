@@ -10,7 +10,7 @@ app/
 │   ├── config.py              # 全局配置 (.env)
 │   └── models.py              # MySQL ORM 模型 (文档/切片/流水线记录)
 ├── db/
-│   ├── milvus.py              # Milvus 兼容性补丁
+│   ├── milvus.py              # Milvus collection/schema/index 管理
 │   └── mysql.py               # MySQL 连接管理
 ├── services/                  # ⭐ 六大可插拔模块及流水线编排
 │   ├── chunker.py             # 文本切片 (递归切分)
@@ -54,7 +54,7 @@ Query → [Retriever] → [Reranker] → [Context] → [LLM] → Answer
 | Embedding | `qwen3-embedding-8b` (OpenAI 兼容) |
 | Reranker | `qwen3-reranker-8b` |
 | LLM | `qwen3-30b-a3b` |
-| 向量存储 | Milvus (HNSW 索引, COSINE 距离) |
+| 向量存储 | Milvus (显式 schema/index 管理, 默认 HNSW + COSINE) |
 | 关系存储 | MySQL 8.0 (流水线记录/文档元数据) |
 | PDF 解析 | PyMuPDF + RapidOCR |
 | 终端可视化 | Rich + Loguru |
@@ -73,6 +73,19 @@ uv sync
 
 # 4. 启动服务
 uv run python -m app.main
+```
+
+## HNSW / Milvus 可调参数
+
+可通过 `.env` 调整以下索引与搜索参数：
+
+```bash
+MILVUS_INDEX_TYPE=HNSW
+MILVUS_METRIC_TYPE=COSINE
+MILVUS_VECTOR_DIM=1024
+HNSW_M=16
+HNSW_EF_CONSTRUCTION=256
+HNSW_EF_SEARCH=128
 ```
 
 ## Debug 模式

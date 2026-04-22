@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     milvus_uri: str = "http://localhost:19530"
     milvus_token: str = ""
     milvus_collection: str = "rag_documents"
+    milvus_index_type: str = "HNSW"
+    milvus_metric_type: str = "COSINE"
+    milvus_vector_dim: int = 1024
+    hnsw_m: int = 16
+    hnsw_ef_construction: int = 256
+    hnsw_ef_search: int = 128
 
     # ---- MySQL ----
     mysql_uri: str = "mysql+pymysql://user:password@localhost:3306/rag_memo"
