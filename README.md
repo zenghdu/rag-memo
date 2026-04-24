@@ -88,6 +88,13 @@ HNSW_EF_CONSTRUCTION=256
 HNSW_EF_SEARCH=128
 ```
 
+当前检索阶段会同时保留两类分数：
+
+- `ann_raw_score`: Milvus 原始返回分数
+- `recall_score`: 统一后的归一化相关度分数，约定为 `higher_is_better`
+
+并可通过 `GET /api/v1/health` 查看当前 HNSW / score 相关配置。
+
 ## Debug 模式
 
 通过 `.env` 中的 `DEBUG_PIPELINE` 控制终端输出详细程度：

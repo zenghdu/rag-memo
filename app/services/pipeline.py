@@ -149,13 +149,22 @@ class PipelineService:
             scored_docs = self.retriever.run(query)
             t_retrieval = (time.time() - t_r0) * 1000
 
+            top_doc = scored_docs[0][0] if scored_docs else None
+            top_score = scored_docs[0][1] if scored_docs else None
+            top_raw_score = top_doc.metadata.get("recall_score_raw") if top_doc else None
             res_ret = ModuleResult(
                 module_name="retriever",
                 duration_ms=t_retrieval,
                 input_summary={"query": query},
                 output_summary={
                     "recalled": len(scored_docs),
-                    "preview": f"Score: {scored_docs[0][1]:.4f} | Content: {scored_docs[0][0].page_content[:100]}" if scored_docs else "Empty",
+                    "metric": self.retriever.last_search_info.get("metric_type"),
+                    "score_kind": self.retriever.last_search_info.get("score_kind"),
+                    "score_direction": self.retriever.last_search_info.get("score_direction"),
+                    "search_ef": self.retriever.last_search_info.get("search_params", {}).get("params", {}).get("ef"),
+                    "top_score": f"{top_score:.4f}" if top_score is not None else "n/a",
+                    "top_raw": f"{top_raw_score:.4f}" if isinstance(top_raw_score, (float, int)) else "n/a",
+                    "preview": f"NormScore: {top_score:.4f} | Raw: {top_raw_score:.4f} | Content: {top_doc.page_content[:100]}" if top_doc and isinstance(top_raw_score, (float, int)) else (f"NormScore: {top_score:.4f} | Content: {top_doc.page_content[:100]}" if top_doc else "Empty"),
                 },
             )
             print_module_summary(**res_ret.model_dump(exclude={"data"}))

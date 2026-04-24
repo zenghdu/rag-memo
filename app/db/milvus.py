@@ -38,6 +38,9 @@ def connect(alias: str = MILVUS_ALIAS) -> str:
 class MilvusVectorStore:
     """使用 pymilvus 显式管理 collection schema / index / search。"""
 
+    DISTANCE_METRICS = {"COSINE", "L2", "JACCARD", "HAMMING"}
+    SIMILARITY_METRICS = {"IP"}
+
     def __init__(self, collection_name: Optional[str] = None, alias: str = MILVUS_ALIAS):
         self.collection_name = collection_name or settings.milvus_collection
         self.alias = connect(alias)
@@ -146,6 +149,8 @@ class MilvusVectorStore:
         docs_with_scores: List[Tuple[LCDocument, float]] = []
         for hit in hits:
             entity = hit.entity
+            raw_score = float(hit.distance)
+            normalized_score = self._normalize_score(raw_score)
             metadata = self._decode_metadata(entity.get(METADATA_FIELD))
             metadata.update(
                 {
@@ -155,11 +160,48 @@ class MilvusVectorStore:
                     "filename": entity.get("filename"),
                     "source": entity.get("source"),
                     "milvus_id": str(hit.id),
+                    "ann_metric_type": settings.milvus_metric_type,
+                    "ann_raw_score": raw_score,
+                    "ann_score_kind": self.score_kind,
+                    "ann_score_direction": self.score_direction,
+                    "ann_normalized_score": normalized_score,
                 }
             )
             doc = LCDocument(page_content=entity.get(TEXT_FIELD), metadata=metadata)
-            docs_with_scores.append((doc, float(hit.distance)))
+            docs_with_scores.append((doc, normalized_score))
         return docs_with_scores
+
+    @property
+    def score_kind(self) -> str:
+        metric = settings.milvus_metric_type.upper()
+        if metric in self.SIMILARITY_METRICS:
+            return "similarity"
+        return "distance"
+
+    @property
+    def score_direction(self) -> str:
+        return "higher_is_better" if self.score_kind == "similarity" else "lower_is_better"
+
+    def observability(self) -> Dict[str, Any]:
+        return {
+            "collection": self.collection_name,
+            "metric_type": settings.milvus_metric_type,
+            "index_type": settings.milvus_index_type,
+            "search_params": self.search_params,
+            "score_kind": self.score_kind,
+            "score_direction": self.score_direction,
+            "normalized_score_desc": "higher_is_better",
+        }
+
+    def _normalize_score(self, raw_score: float) -> float:
+        metric = settings.milvus_metric_type.upper()
+        if metric == "COSINE":
+            return max(-1.0, min(1.0, 1.0 - raw_score))
+        if metric == "IP":
+            return raw_score
+        if metric == "L2":
+            return 1.0 / (1.0 + raw_score)
+        return raw_score if self.score_kind == "similarity" else -raw_score
 
     def _normalize_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
         normalized: Dict[str, Any] = {}
