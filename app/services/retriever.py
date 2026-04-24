@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from langchain_core.documents import Document as LCDocument
 
 from app.core.config import settings
@@ -15,11 +15,11 @@ class Retriever:
         self.vector_store = MilvusVectorStore(collection_name=self.collection_name)
         self.last_search_info = self.vector_store.observability() | {"top_k": self.top_k, "returned": 0}
 
-    def run(self, query: str) -> List[Tuple[LCDocument, float]]:
+    def run(self, query: str, filters: Optional[Dict[str, Any]] = None) -> List[Tuple[LCDocument, float]]:
         """执行召回流程 (向量检索)"""
-        logger.debug(f"Retrieving for query: {query}")
-        results = self.vector_store.similarity_search_with_score(query=query, k=self.top_k)
-        self.last_search_info = self.vector_store.observability() | {
+        logger.debug(f"Retrieving for query: {query} | filters: {filters or {}}")
+        results = self.vector_store.similarity_search_with_score(query=query, k=self.top_k, filters=filters)
+        self.last_search_info = self.vector_store.observability(filters=filters) | {
             "top_k": self.top_k,
             "returned": len(results),
         }

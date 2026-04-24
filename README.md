@@ -95,6 +95,13 @@ HNSW_EF_SEARCH=128
 
 并可通过 `GET /api/v1/health` 查看当前 HNSW / score 相关配置。
 
+同时支持文档级索引管理与检索过滤：
+
+- `GET /api/v1/documents`：查看已摄入文档
+- `DELETE /api/v1/documents/{document_id}`：删除文档及对应向量
+- `POST /api/v1/documents/{document_id}/reindex`：按 document_id 重建索引
+- `POST /api/v1/chat/invoke` 支持可选过滤参数：`document_ids` / `filename` / `source`
+
 ## Debug 模式
 
 通过 `.env` 中的 `DEBUG_PIPELINE` 控制终端输出详细程度：
@@ -125,5 +132,8 @@ uv run pytest tests/test_pipeline.py
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | POST | `/api/v1/documents/upload` | 上传文件并触发摄入流水线 |
-| POST | `/api/v1/chat/invoke` | 模块化 RAG 问答 |
-| GET  | `/api/v1/health` | 健康检查 (含 debug 模式状态) |
+| GET  | `/api/v1/documents` | 查看已摄入文档与 chunk 数 |
+| DELETE | `/api/v1/documents/{document_id}` | 删除文档及对应向量索引 |
+| POST | `/api/v1/documents/{document_id}/reindex` | 重建指定文档索引 |
+| POST | `/api/v1/chat/invoke` | 模块化 RAG 问答，支持文档范围过滤 |
+| GET  | `/api/v1/health` | 健康检查 (含 debug / HNSW 配置) |

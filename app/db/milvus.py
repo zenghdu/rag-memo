@@ -125,16 +125,22 @@ class MilvusVectorStore:
         collection.delete(expr=f"document_id == {int(document_id)}")
         collection.flush()
 
-    def similarity_search_with_score(self, query: str, k: int = 5) -> List[Tuple[LCDocument, float]]:
+    def similarity_search_with_score(
+        self,
+        query: str,
+        k: int = 5,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> List[Tuple[LCDocument, float]]:
         collection = self.ensure_collection()
         collection.load()
         query_vector = self.embeddings.embed_query(query)
-        search_result = collection.search(
-            data=[query_vector],
-            anns_field=VECTOR_FIELD,
-            param=self.search_params,
-            limit=k,
-            output_fields=[
+        expr = self._build_expr(filters)
+        search_kwargs: Dict[str, Any] = {
+            "data": [query_vector],
+            "anns_field": VECTOR_FIELD,
+            "param": self.search_params,
+            "limit": k,
+            "output_fields": [
                 "document_id",
                 "chunk_index",
                 "page_num",
@@ -143,7 +149,10 @@ class MilvusVectorStore:
                 TEXT_FIELD,
                 METADATA_FIELD,
             ],
-        )
+        }
+        if expr:
+            search_kwargs["expr"] = expr
+        search_result = collection.search(**search_kwargs)
 
         hits = search_result[0] if search_result else []
         docs_with_scores: List[Tuple[LCDocument, float]] = []
@@ -182,7 +191,7 @@ class MilvusVectorStore:
     def score_direction(self) -> str:
         return "higher_is_better" if self.score_kind == "similarity" else "lower_is_better"
 
-    def observability(self) -> Dict[str, Any]:
+    def observability(self, filters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         return {
             "collection": self.collection_name,
             "metric_type": settings.milvus_metric_type,
@@ -191,7 +200,29 @@ class MilvusVectorStore:
             "score_kind": self.score_kind,
             "score_direction": self.score_direction,
             "normalized_score_desc": "higher_is_better",
+            "filters": filters or {},
+            "expr": self._build_expr(filters),
         }
+
+    def _build_expr(self, filters: Optional[Dict[str, Any]] = None) -> Optional[str]:
+        if not filters:
+            return None
+
+        clauses: List[str] = []
+        document_ids = filters.get("document_ids") or []
+        if document_ids:
+            ids = [str(int(doc_id)) for doc_id in document_ids]
+            clauses.append(f"document_id in [{', '.join(ids)}]")
+
+        filename = filters.get("filename")
+        if filename:
+            clauses.append(f"filename == {json.dumps(str(filename))}")
+
+        source = filters.get("source")
+        if source:
+            clauses.append(f"source == {json.dumps(str(source))}")
+
+        return " and ".join(clauses) if clauses else None
 
     def _normalize_score(self, raw_score: float) -> float:
         metric = settings.milvus_metric_type.upper()

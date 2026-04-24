@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 import hashlib
 import time
 import uuid
@@ -137,16 +137,17 @@ class PipelineService:
             "details": results,
         }
 
-    def chat(self, query: str) -> str:
+    def chat(self, query: str, filters: Optional[Dict[str, Any]] = None) -> str:
         """RAG 问答全流程: Retriever -> Reranker -> Context -> LLM"""
         run_id = str(uuid.uuid4())
         results = []
+        filters = self._clean_filters(filters)
 
         with PipelineProgress(query) as p:
             # 1. Retriever (Recall)
             print_module_start("Retriever")
             t_r0 = time.time()
-            scored_docs = self.retriever.run(query)
+            scored_docs = self.retriever.run(query, filters=filters)
             t_retrieval = (time.time() - t_r0) * 1000
 
             top_doc = scored_docs[0][0] if scored_docs else None
@@ -155,13 +156,14 @@ class PipelineService:
             res_ret = ModuleResult(
                 module_name="retriever",
                 duration_ms=t_retrieval,
-                input_summary={"query": query},
+                input_summary={"query": query, "filters": filters},
                 output_summary={
                     "recalled": len(scored_docs),
                     "metric": self.retriever.last_search_info.get("metric_type"),
                     "score_kind": self.retriever.last_search_info.get("score_kind"),
                     "score_direction": self.retriever.last_search_info.get("score_direction"),
                     "search_ef": self.retriever.last_search_info.get("search_params", {}).get("params", {}).get("ef"),
+                    "filters": self.retriever.last_search_info.get("filters", {}),
                     "top_score": f"{top_score:.4f}" if top_score is not None else "n/a",
                     "top_raw": f"{top_raw_score:.4f}" if isinstance(top_raw_score, (float, int)) else "n/a",
                     "preview": f"NormScore: {top_score:.4f} | Raw: {top_raw_score:.4f} | Content: {top_doc.page_content[:100]}" if top_doc and isinstance(top_raw_score, (float, int)) else (f"NormScore: {top_score:.4f} | Content: {top_doc.page_content[:100]}" if top_doc else "Empty"),
@@ -227,3 +229,60 @@ class PipelineService:
 
             print_final_answer(answer, run_id)
             return answer
+
+    def list_documents(self) -> List[Dict[str, Any]]:
+        with SessionLocal() as db:
+            documents = db.query(DBDocument).order_by(DBDocument.created_at.desc()).all()
+            return [
+                {
+                    "id": doc.id,
+                    "filename": doc.filename,
+                    "file_path": doc.file_path,
+                    "file_type": doc.file_type,
+                    "status": doc.status,
+                    "created_at": doc.created_at.isoformat() if doc.created_at else None,
+                    "chunk_count": len(doc.chunks),
+                }
+                for doc in documents
+            ]
+
+    def delete_document(self, document_id: int) -> Dict[str, Any]:
+        with SessionLocal() as db:
+            document = db.query(DBDocument).filter(DBDocument.id == document_id).one_or_none()
+            if document is None:
+                raise ValueError(f"Document {document_id} not found")
+
+            self.embedder.vector_store.delete_by_document_id(document.id)
+            db.query(DBChunk).filter(DBChunk.document_id == document.id).delete()
+            deleted_filename = document.filename
+            db.delete(document)
+            db.commit()
+            return {"deleted": True, "document_id": document_id, "filename": deleted_filename}
+
+    def reindex_document(self, document_id: int) -> Dict[str, Any]:
+        with SessionLocal() as db:
+            document = db.query(DBDocument).filter(DBDocument.id == document_id).one_or_none()
+            if document is None:
+                raise ValueError(f"Document {document_id} not found")
+            file_path = Path(document.file_path)
+
+        if not file_path.exists():
+            raise FileNotFoundError(f"Document file not found: {file_path}")
+
+        return self.ingest(file_path)
+
+    def _clean_filters(self, filters: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        if not filters:
+            return {}
+
+        cleaned: Dict[str, Any] = {}
+        document_ids = filters.get("document_ids")
+        if document_ids:
+            cleaned["document_ids"] = [int(doc_id) for doc_id in document_ids]
+        filename = filters.get("filename")
+        if filename:
+            cleaned["filename"] = str(filename)
+        source = filters.get("source")
+        if source:
+            cleaned["source"] = str(source)
+        return cleaned
