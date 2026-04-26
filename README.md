@@ -102,6 +102,16 @@ HNSW_EF_SEARCH=128
 - `POST /api/v1/documents/{document_id}/reindex`：按 document_id 重建索引
 - `POST /api/v1/chat/invoke` 支持可选过滤参数：`document_ids` / `filename` / `source`
 
+切片元信息会尽量保留定位字段：
+
+- `document_title`：文件标题
+- `section_title`：当前片段所在标题
+- `heading_path`：层级标题路径，例如 `第1章 > 1.2 背景 > 1.2.1 定义`
+- `heading_titles`：层级标题数组
+- `source_start_index`：该片段在原页面/原文本中的起始偏移
+
+> 标题提取目前采用启发式规则（Markdown 标题、编号标题、中文“第X章/节”标题、短标题行）。
+
 ## Debug 模式
 
 通过 `.env` 中的 `DEBUG_PIPELINE` 控制终端输出详细程度：

@@ -1,6 +1,7 @@
 from __future__ import annotations
 from pathlib import Path
 from typing import List, Optional
+import re
 import fitz  # PyMuPDF
 from langchain_core.documents import Document as LCDocument
 
@@ -36,6 +37,7 @@ class Loader:
 
     def _load_pdf(self, pdf_path: Path) -> List[LCDocument]:
         documents: List[LCDocument] = []
+        document_title: Optional[str] = None
         with fitz.open(str(pdf_path)) as pdf:
             for page_index, page in enumerate(pdf, start=1):
                 text = (page.get_text("text") or "").strip()
@@ -51,6 +53,9 @@ class Loader:
                 if not text:
                     continue
 
+                if document_title is None:
+                    document_title = self._infer_document_title(text, pdf_path.stem)
+
                 documents.append(
                     LCDocument(
                         page_content=text,
@@ -60,6 +65,7 @@ class Loader:
                             "page": page_index,
                             "parser": parser,
                             "file_type": "pdf",
+                            "document_title": document_title or pdf_path.stem,
                         },
                     )
                 )
@@ -78,6 +84,7 @@ class Loader:
         if not text.strip():
             return []
 
+        document_title = self._infer_document_title(text, image_path.stem)
         return [
             LCDocument(
                 page_content=text,
@@ -86,12 +93,14 @@ class Loader:
                     "filename": image_path.name,
                     "parser": "rapidocr",
                     "file_type": "image",
+                    "document_title": document_title,
                 },
             )
         ]
 
     def _load_text(self, path: Path) -> List[LCDocument]:
         content = path.read_text(encoding="utf-8")
+        document_title = self._infer_document_title(content, path.stem)
         return [
             LCDocument(
                 page_content=content,
@@ -99,6 +108,20 @@ class Loader:
                     "source": str(path),
                     "filename": path.name,
                     "file_type": "text",
+                    "document_title": document_title,
                 }
             )
         ]
+
+    def _infer_document_title(self, text: str, fallback: str) -> str:
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            markdown_match = re.match(r"^#{1,6}\s+(.+)$", line)
+            if markdown_match:
+                return markdown_match.group(1).strip()
+            cleaned = re.sub(r"\s+", " ", line).strip("#-_* ")
+            if 1 <= len(cleaned) <= 120:
+                return cleaned
+        return fallback
