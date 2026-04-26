@@ -26,7 +26,9 @@ class Settings(BaseSettings):
     # ---- Embedding ----
     embedding_model: str = "qwen/qwen3-embedding-8b"
     embedding_api_key: str = ""
-    embedding_base_url: str = "https://api.openai.com/v1"
+    embedding_base_url: str = "https://api.openai.com"
+    embedding_concurrency: int = 4
+    embedding_batch_size: int = 32
 
     # ---- LLM ----
     llm_model: str = "qwen/qwen3-30b-a3b"
@@ -43,6 +45,7 @@ class Settings(BaseSettings):
     hnsw_m: int = 16
     hnsw_ef_construction: int = 256
     hnsw_ef_search: int = 128
+    milvus_auto_flush: bool = False
 
     # ---- MySQL ----
     mysql_uri: str = "mysql+pymysql://user:password@localhost:3306/rag_memo"

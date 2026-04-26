@@ -97,7 +97,7 @@ class MilvusVectorStore:
         collection.create_index(VECTOR_FIELD, self.index_params)
         return collection
 
-    def add_documents(self, documents: List[LCDocument]) -> List[str]:
+    def add_documents(self, documents: List[LCDocument], *, flush: Optional[bool] = None) -> List[str]:
         if not documents:
             return []
 
@@ -117,12 +117,19 @@ class MilvusVectorStore:
         ]
 
         result = collection.insert(payload)
-        collection.flush()
+        if flush if flush is not None else settings.milvus_auto_flush:
+            collection.flush()
         return [str(pk) for pk in result.primary_keys]
 
-    def delete_by_document_id(self, document_id: int) -> None:
+    def delete_by_document_id(self, document_id: int, *, flush: bool = True) -> None:
         collection = self.ensure_collection()
+        collection.load()
         collection.delete(expr=f"document_id == {int(document_id)}")
+        if flush:
+            collection.flush()
+
+    def flush(self) -> None:
+        collection = self.ensure_collection()
         collection.flush()
 
     def similarity_search_with_score(

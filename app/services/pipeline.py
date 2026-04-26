@@ -37,7 +37,7 @@ class PipelineService:
         self.reranker = Reranker()
         self.context_builder = ContextBuilder()
 
-    def ingest(self, file_path: Path) -> Dict[str, Any]:
+    def ingest(self, file_path: Path, *, flush_vector_store: bool = True) -> Dict[str, Any]:
         """文档摄入全流程: Load -> Chunk -> Embedder"""
         run_id = str(uuid.uuid4())
         results = []
@@ -45,6 +45,7 @@ class PipelineService:
 
         with SessionLocal() as db:
             db_document = db.query(DBDocument).filter(DBDocument.file_hash == file_hash).one_or_none()
+            is_reindex = db_document is not None
             if db_document is None:
                 db_document = DBDocument(
                     filename=file_path.name,
@@ -100,8 +101,11 @@ class PipelineService:
             # 3. Embedder
             print_module_start("Embedder")
             t2 = time.time()
-            self.embedder.vector_store.delete_by_document_id(db_document.id)
-            emb_res = self.embedder.run(chunks)
+            if is_reindex:
+                self.embedder.vector_store.delete_by_document_id(db_document.id, flush=False)
+            emb_res = self.embedder.run(chunks, flush=False if is_reindex else flush_vector_store)
+            if is_reindex and flush_vector_store:
+                self.embedder.vector_store.flush()
             t_emb = (time.time() - t2) * 1000
 
             res_emb = ModuleResult(
