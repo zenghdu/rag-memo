@@ -88,6 +88,30 @@ HNSW_EF_CONSTRUCTION=256
 HNSW_EF_SEARCH=128
 ```
 
+当前检索阶段会同时保留两类分数：
+
+- `ann_raw_score`: Milvus 原始返回分数
+- `recall_score`: 统一后的归一化相关度分数，约定为 `higher_is_better`
+
+并可通过 `GET /api/v1/health` 查看当前 HNSW / score 相关配置。
+
+同时支持文档级索引管理与检索过滤：
+
+- `GET /api/v1/documents`：查看已摄入文档
+- `DELETE /api/v1/documents/{document_id}`：删除文档及对应向量
+- `POST /api/v1/documents/{document_id}/reindex`：按 document_id 重建索引
+- `POST /api/v1/chat/invoke` 支持可选过滤参数：`document_ids` / `filename` / `source`
+
+切片元信息会尽量保留定位字段：
+
+- `document_title`：文件标题
+- `section_title`：当前片段所在标题
+- `heading_path`：层级标题路径，例如 `第1章 > 1.2 背景 > 1.2.1 定义`
+- `heading_titles`：层级标题数组
+- `source_start_index`：该片段在原页面/原文本中的起始偏移
+
+> 标题提取目前采用启发式规则（Markdown 标题、编号标题、中文“第X章/节”标题、短标题行）。
+
 ## Debug 模式
 
 通过 `.env` 中的 `DEBUG_PIPELINE` 控制终端输出详细程度：
@@ -118,5 +142,8 @@ uv run pytest tests/test_pipeline.py
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | POST | `/api/v1/documents/upload` | 上传文件并触发摄入流水线 |
-| POST | `/api/v1/chat/invoke` | 模块化 RAG 问答 |
-| GET  | `/api/v1/health` | 健康检查 (含 debug 模式状态) |
+| GET  | `/api/v1/documents` | 查看已摄入文档与 chunk 数 |
+| DELETE | `/api/v1/documents/{document_id}` | 删除文档及对应向量索引 |
+| POST | `/api/v1/documents/{document_id}/reindex` | 重建指定文档索引 |
+| POST | `/api/v1/chat/invoke` | 模块化 RAG 问答，支持文档范围过滤 |
+| GET  | `/api/v1/health` | 健康检查 (含 debug / HNSW 配置) |

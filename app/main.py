@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 import shutil
-import time
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
+from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
 
-from app.core.config import UPLOAD_DIR, DATA_DIR, settings
-from app.db.mysql import get_db, init_db
+from app.core.config import UPLOAD_DIR, settings
+from app.db.mysql import init_db
 from app.services.pipeline import PipelineService
 from app.services.loader import SUPPORTED_EXTS
 
@@ -74,12 +72,53 @@ async def upload_document(file: UploadFile = File(...)):
 
 class ChatInput(BaseModel):
     question: str
+    document_ids: Optional[List[int]] = None
+    filename: Optional[str] = None
+    source: Optional[str] = None
+
+
+class DocumentActionResponse(BaseModel):
+    deleted: bool
+    document_id: int
+    filename: str
+
+
+@app.get("/api/v1/documents")
+async def list_documents():
+    """查看当前已摄入文档及其索引状态"""
+    return {"documents": pipeline.list_documents()}
+
+
+@app.delete("/api/v1/documents/{document_id}", response_model=DocumentActionResponse)
+async def delete_document(document_id: int):
+    """删除文档及其对应的 MySQL / Milvus 索引数据"""
+    try:
+        return pipeline.delete_document(document_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/v1/documents/{document_id}/reindex", response_model=IngestResponse)
+async def reindex_document(document_id: int):
+    """按 document_id 重新构建该文档的切片与向量索引"""
+    try:
+        return pipeline.reindex_document(document_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
 
 @app.post("/api/v1/chat/invoke")
 async def chat_invoke(input_data: ChatInput):
-    """模块化 RAG 问答"""
-    answer = pipeline.chat(input_data.question)
-    return {"output": answer}
+    """模块化 RAG 问答，可按文档范围过滤检索"""
+    filters = {
+        "document_ids": input_data.document_ids,
+        "filename": input_data.filename,
+        "source": input_data.source,
+    }
+    answer = pipeline.chat(input_data.question, filters=filters)
+    return {"output": answer, "filters": {k: v for k, v in filters.items() if v}}
 
 
 @app.get("/api/v1/health")
@@ -89,23 +128,26 @@ async def health():
         "debug_mode": settings.debug_pipeline,
         "embedding_model": settings.embedding_model,
         "llm_model": settings.llm_model,
-        "mysql_uri": settings.mysql_uri.split("@")[-1], # 安全屏蔽密码
-    }
-
-
-# ═══════════════════════════════════════
-# 健康检查 & 配置信息
-# ═══════════════════════════════════════
-
-
-@app.get("/api/v1/health")
-async def health():
-    return {
-        "status": "ok",
-        "embedding_model": settings.embedding_model,
-        "llm_model": settings.llm_model,
-        "milvus_uri": settings.milvus_uri,
-        "collection": settings.milvus_collection,
+        "mysql_uri": settings.mysql_uri.split("@")[-1],
+        "milvus": {
+            "uri": settings.milvus_uri,
+            "collection": settings.milvus_collection,
+            "index_type": settings.milvus_index_type,
+            "metric_type": settings.milvus_metric_type,
+            "vector_dim": settings.milvus_vector_dim,
+            "hnsw": {
+                "m": settings.hnsw_m,
+                "ef_construction": settings.hnsw_ef_construction,
+                "ef_search": settings.hnsw_ef_search,
+            },
+        },
+        "retriever": {
+            "top_k": settings.retriever_top_k,
+            "score_semantics": {
+                "raw": "milvus_native_score",
+                "normalized": "higher_is_better",
+            },
+        },
     }
 
 

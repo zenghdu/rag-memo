@@ -38,6 +38,9 @@ def connect(alias: str = MILVUS_ALIAS) -> str:
 class MilvusVectorStore:
     """使用 pymilvus 显式管理 collection schema / index / search。"""
 
+    DISTANCE_METRICS = {"COSINE", "L2", "JACCARD", "HAMMING"}
+    SIMILARITY_METRICS = {"IP"}
+
     def __init__(self, collection_name: Optional[str] = None, alias: str = MILVUS_ALIAS):
         self.collection_name = collection_name or settings.milvus_collection
         self.alias = connect(alias)
@@ -122,16 +125,22 @@ class MilvusVectorStore:
         collection.delete(expr=f"document_id == {int(document_id)}")
         collection.flush()
 
-    def similarity_search_with_score(self, query: str, k: int = 5) -> List[Tuple[LCDocument, float]]:
+    def similarity_search_with_score(
+        self,
+        query: str,
+        k: int = 5,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> List[Tuple[LCDocument, float]]:
         collection = self.ensure_collection()
         collection.load()
         query_vector = self.embeddings.embed_query(query)
-        search_result = collection.search(
-            data=[query_vector],
-            anns_field=VECTOR_FIELD,
-            param=self.search_params,
-            limit=k,
-            output_fields=[
+        expr = self._build_expr(filters)
+        search_kwargs: Dict[str, Any] = {
+            "data": [query_vector],
+            "anns_field": VECTOR_FIELD,
+            "param": self.search_params,
+            "limit": k,
+            "output_fields": [
                 "document_id",
                 "chunk_index",
                 "page_num",
@@ -140,12 +149,17 @@ class MilvusVectorStore:
                 TEXT_FIELD,
                 METADATA_FIELD,
             ],
-        )
+        }
+        if expr:
+            search_kwargs["expr"] = expr
+        search_result = collection.search(**search_kwargs)
 
         hits = search_result[0] if search_result else []
         docs_with_scores: List[Tuple[LCDocument, float]] = []
         for hit in hits:
             entity = hit.entity
+            raw_score = float(hit.distance)
+            normalized_score = self._normalize_score(raw_score)
             metadata = self._decode_metadata(entity.get(METADATA_FIELD))
             metadata.update(
                 {
@@ -155,11 +169,70 @@ class MilvusVectorStore:
                     "filename": entity.get("filename"),
                     "source": entity.get("source"),
                     "milvus_id": str(hit.id),
+                    "ann_metric_type": settings.milvus_metric_type,
+                    "ann_raw_score": raw_score,
+                    "ann_score_kind": self.score_kind,
+                    "ann_score_direction": self.score_direction,
+                    "ann_normalized_score": normalized_score,
                 }
             )
             doc = LCDocument(page_content=entity.get(TEXT_FIELD), metadata=metadata)
-            docs_with_scores.append((doc, float(hit.distance)))
+            docs_with_scores.append((doc, normalized_score))
         return docs_with_scores
+
+    @property
+    def score_kind(self) -> str:
+        metric = settings.milvus_metric_type.upper()
+        if metric in self.SIMILARITY_METRICS:
+            return "similarity"
+        return "distance"
+
+    @property
+    def score_direction(self) -> str:
+        return "higher_is_better" if self.score_kind == "similarity" else "lower_is_better"
+
+    def observability(self, filters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        return {
+            "collection": self.collection_name,
+            "metric_type": settings.milvus_metric_type,
+            "index_type": settings.milvus_index_type,
+            "search_params": self.search_params,
+            "score_kind": self.score_kind,
+            "score_direction": self.score_direction,
+            "normalized_score_desc": "higher_is_better",
+            "filters": filters or {},
+            "expr": self._build_expr(filters),
+        }
+
+    def _build_expr(self, filters: Optional[Dict[str, Any]] = None) -> Optional[str]:
+        if not filters:
+            return None
+
+        clauses: List[str] = []
+        document_ids = filters.get("document_ids") or []
+        if document_ids:
+            ids = [str(int(doc_id)) for doc_id in document_ids]
+            clauses.append(f"document_id in [{', '.join(ids)}]")
+
+        filename = filters.get("filename")
+        if filename:
+            clauses.append(f"filename == {json.dumps(str(filename))}")
+
+        source = filters.get("source")
+        if source:
+            clauses.append(f"source == {json.dumps(str(source))}")
+
+        return " and ".join(clauses) if clauses else None
+
+    def _normalize_score(self, raw_score: float) -> float:
+        metric = settings.milvus_metric_type.upper()
+        if metric == "COSINE":
+            return max(-1.0, min(1.0, 1.0 - raw_score))
+        if metric == "IP":
+            return raw_score
+        if metric == "L2":
+            return 1.0 / (1.0 + raw_score)
+        return raw_score if self.score_kind == "similarity" else -raw_score
 
     def _normalize_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
         normalized: Dict[str, Any] = {}

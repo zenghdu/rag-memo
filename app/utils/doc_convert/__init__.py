@@ -3,8 +3,11 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 from typing import Optional
+import sys
 
-DOC_TO_MD_BIN = Path(__file__).resolve().parent / "doc_to_md"
+
+BIN_DIR = Path(__file__).resolve().parent
+DOC_TO_MD_BIN = BIN_DIR / ("doc_to_md.exe" if sys.platform.startswith("win") else "doc_to_md")
 
 
 def convert_doc_to_md(

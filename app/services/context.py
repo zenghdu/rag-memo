@@ -25,7 +25,17 @@ class ContextBuilder:
             meta = doc.metadata
             source = meta.get("filename", "unknown")
             page = meta.get("page", "?")
-            parts.append(f"[{i}] 来源: {source} | 页码: {page} | 相关度: {score:.4f}\n{doc.page_content}")
+            document_title = meta.get("document_title") or source
+            heading_path = meta.get("heading_path")
+            raw_score = meta.get("recall_score_raw")
+            if raw_score is None:
+                score_text = f"相关度(归一化): {score:.4f}"
+            else:
+                score_text = f"相关度(归一化): {score:.4f} | 原始分数: {raw_score:.4f}"
+            location = f"标题: {document_title} | 来源: {source} | 页码: {page}"
+            if heading_path:
+                location += f" | 层级标题: {heading_path}"
+            parts.append(f"[{i}] {location} | {score_text}\n{doc.page_content}")
             
         context_str = "\n\n---\n\n".join(parts)
         
