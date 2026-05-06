@@ -2,9 +2,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import List, Optional
 import re
+import sys
+import tempfile
 import fitz  # PyMuPDF
 from langchain_core.documents import Document as LCDocument
 
+from app.utils.doc_convert import convert_doc_to_docx, convert_doc_to_md
+from app.utils.docx_to_md import docx_to_md
 from app.utils.ocr import ocr_from_bytes
 from app.utils.logger import logger
 
@@ -30,6 +34,8 @@ class Loader:
             return self._load_pdf(file_path)
         elif ext in SUPPORTED_IMAGE_EXTS:
             return self._load_image(file_path)
+        elif ext in SUPPORTED_DOC_EXTS:
+            return self._load_doc(file_path)
         elif ext in SUPPORTED_TEXT_EXTS:
             return self._load_text(file_path)
         else:
@@ -93,6 +99,55 @@ class Loader:
                     "filename": image_path.name,
                     "parser": "rapidocr",
                     "file_type": "image",
+                    "document_title": document_title,
+                },
+            )
+        ]
+
+    def _load_doc(self, doc_path: Path) -> List[LCDocument]:
+        """加载 .doc / .docx 文件，并根据系统环境选择转换方案。"""
+        suffix = doc_path.suffix.lower()
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_dir_path = Path(tmp_dir)
+            md_path = tmp_dir_path / f"{doc_path.stem}.md"
+            parser = ""
+
+            if suffix == ".docx":
+                logger.debug(f"Converting docx to markdown via pandoc: {doc_path} -> {md_path}")
+                docx_to_md(str(doc_path), str(md_path), remove_blockquote=True)
+                parser = "pandoc_docx"
+            elif suffix == ".doc":
+                if sys.platform.startswith("win"):
+                    temp_docx_path = tmp_dir_path / f"{doc_path.stem}.docx"
+                    logger.debug(
+                        f"Windows detected, converting doc to docx via pywin32: {doc_path} -> {temp_docx_path}"
+                    )
+                    convert_doc_to_docx(doc_path, temp_docx_path)
+                    logger.debug(f"Converting intermediate docx to markdown via pandoc: {temp_docx_path} -> {md_path}")
+                    docx_to_md(str(temp_docx_path), str(md_path), remove_blockquote=True)
+                    parser = "pywin32+pandoc_docx"
+                else:
+                    logger.debug(f"Non-Windows detected, converting doc to markdown via wvHtml: {doc_path} -> {md_path}")
+                    convert_doc_to_md(doc_path, md_path)
+                    parser = "wvhtml+pandoc"
+            else:
+                raise ValueError(f"Unsupported office file type: {suffix}")
+
+            content = md_path.read_text(encoding="utf-8")
+
+        if not content.strip():
+            return []
+
+        document_title = self._infer_document_title(content, doc_path.stem)
+        return [
+            LCDocument(
+                page_content=content,
+                metadata={
+                    "source": str(doc_path),
+                    "filename": doc_path.name,
+                    "parser": parser,
+                    "file_type": "doc",
                     "document_title": document_title,
                 },
             )

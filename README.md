@@ -57,7 +57,7 @@ Query → [Retriever] → [Reranker] → [Context] → [LLM] → Answer
 | 向量存储 | Milvus (显式 schema/index 管理, 默认 HNSW + COSINE) |
 | 关系存储 | MySQL 8.0 (流水线记录/文档元数据) |
 | PDF 解析 | PyMuPDF + RapidOCR |
-| 终端可视化 | Rich + Loguru |
+| 终端输出 | ASCII 纯文本 + Loguru |
 
 ## 快速开始
 
@@ -74,6 +74,19 @@ uv sync
 # 4. 启动服务
 uv run python -m app.main
 ```
+
+## Windows 部署说明
+
+如果需要在 Windows 上处理 `.doc` / `.docx` 文件，请提前安装以下依赖：
+
+- `pywin32`
+- `Microsoft Word`
+- `pandoc`
+
+说明：
+- Windows 下 `.doc` 文件转换固定使用 `pywin32 + Microsoft Word COM`
+- `.docx` 转 Markdown 依赖 `pandoc`
+- 当前终端输出已改为 ASCII 纯文本，避免部分 Windows 终端因编码问题导致富文本或 emoji 显示异常
 
 ## HNSW / Milvus 可调参数
 
@@ -116,18 +129,18 @@ HNSW_EF_SEARCH=128
 
 通过 `.env` 中的 `DEBUG_PIPELINE` 控制终端输出详细程度：
 
-**开启 (`DEBUG_PIPELINE=true`)**：显示每个模块的详细面板输出
+**开启 (`DEBUG_PIPELINE=true`)**：显示每个模块的详细文本输出
 ```
-▶ Starting Module: Loader
-🟢 Module: loader     | Status: success  | Time: 40ms | ...
-╭──────────────── loader Detail Output ────────────────╮
-│ Understanding Climate Change ...                      │
-╰──────────────────────────────────────────────────────╯
+>>> Starting Module: Loader
+[SUCCESS] Module: loader     | Time: 40.00ms | ...
+--- loader Detail Output ---
+Understanding Climate Change ...
+--- End loader Detail Output ---
 ```
 
 **关闭 (`DEBUG_PIPELINE=false`)**：仅显示精简摘要
 ```
-🟢 Module: loader     | Status: success  | Time: 40ms | ...
+[SUCCESS] Module: loader     | Time: 40.00ms | ...
 ```
 
 ## 测试
