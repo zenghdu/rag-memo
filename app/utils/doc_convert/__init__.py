@@ -58,3 +58,6 @@ def convert_doc_to_md(
         raise RuntimeError(f"转换程序执行成功，但未找到输出文件: {md_path}")
 
     return md_path
+
+
+from .convert_doc_to_docx import convert_doc_to_docx
