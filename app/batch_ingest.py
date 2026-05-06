@@ -67,7 +67,7 @@ class BatchIngestRunner:
                 succeeded += 1
 
                 logger.info(
-                    f"  ✓ 完成 | 页数: {result.get('pages', '?')} | "
+                    f"  [OK] 完成 | 页数: {result.get('pages', '?')} | "
                     f"切片数: {result.get('chunks', '?')} | "
                     f"耗时: {elapsed:.2f}s"
                 )
@@ -80,7 +80,7 @@ class BatchIngestRunner:
                     "error": str(exc),
                 }
                 results.append(err_info)
-                logger.error(f"  ✗ 失败 | 错误: {exc}")
+                logger.error(f"  [FAIL] 失败 | 错误: {exc}")
 
         total_elapsed = time.time() - total_start
 

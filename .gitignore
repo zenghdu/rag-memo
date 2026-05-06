@@ -13,6 +13,9 @@ wheels/
 milvus_data/
 app/data/
 
+# IDE
+.vscode/
+
 # Secrets
 .env
 \n/data/\n/app/data/

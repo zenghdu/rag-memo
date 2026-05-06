@@ -24,7 +24,7 @@ logger.add(
 def print_module_start(name: str):
     """打印模块开始运行"""
     if settings.debug_pipeline:
-        console.print(f"\n[bold cyan]▶ Starting Module: [inverse]{name}[/inverse][/bold cyan]")
+        console.print(f"\n[bold cyan]> Starting Module: [inverse]{name}[/inverse][/bold cyan]")
 
 def print_module_summary(
     module_name: str, 
@@ -36,7 +36,7 @@ def print_module_summary(
 ):
     """显示模块摘要"""
     color = "green" if status == "success" else "red"
-    icon = "🟢" if status == "success" else "🔴"
+    icon = "[OK]" if status == "success" else "[FAIL]"
     
     # 基础信息
     line = f"{icon} [bold {color}]Module: {module_name: <10}[/bold {color}] | Status: {status: <8} | Time: [yellow]{duration_ms:.2f}ms[/yellow]"
@@ -61,12 +61,12 @@ def print_module_summary(
         console.print(panel)
     
     if error:
-        console.print(f"   [bold red]❌ Error: {error}[/bold red]")
+        console.print(f"   [bold red]X Error: {error}[/bold red]")
 
 def print_final_answer(answer: str, run_id: str = None):
     """打印最终回答"""
     console.print("\n" + "="*80)
-    console.print(f"🤖 [bold green]Assistant:[/bold green]\n\n{answer}")
+    console.print(f"[Assistant]:[/bold green]\n\n{answer}")
     if run_id:
         console.print(f"\n[dim italic]Run ID: {run_id}[/dim italic]")
     console.print("="*80 + "\n")
@@ -78,7 +78,7 @@ class PipelineProgress:
         self.start_time = time.time()
         
     def __enter__(self):
-        console.print(f"\n[bold yellow]🔍 Query:[/bold yellow] [bold white]{self.query}[/bold white]\n")
+        console.print(f"\n[bold yellow][Query][/bold yellow] [bold white]{self.query}[/bold white]\n")
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
