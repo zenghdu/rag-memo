@@ -51,7 +51,7 @@ Query → [Retriever] → [Reranker] → [Context] → [LLM] → Answer
 | 组件 | 技术选型 |
 |------|---------|
 | 框架 | FastAPI |
-| Embedding | `qwen3-embedding-8b` (OpenAI 兼容) |
+| Embedding | `qwen3-embedding-8b` (OpenAI 兼容，支持分批并发调用) |
 | Reranker | `qwen3-reranker-8b` |
 | LLM | `qwen3-30b-a3b` |
 | 向量存储 | Milvus (显式 schema/index 管理, 默认 HNSW + COSINE) |
@@ -86,7 +86,20 @@ MILVUS_VECTOR_DIM=1024
 HNSW_M=16
 HNSW_EF_CONSTRUCTION=256
 HNSW_EF_SEARCH=128
+
+# Embedding 并发参数
+EMBEDDING_BATCH_SIZE=32
+EMBEDDING_MAX_CONCURRENCY=4
+EMBEDDING_PARALLEL_THRESHOLD=64
+
+# Chunking 并发参数
+CHUNKING_MAX_CONCURRENCY=4
+CHUNKING_PARALLEL_THRESHOLD=8
 ```
+
+当一次摄入的页面/文档段较多时，Chunker 会在达到 `CHUNKING_PARALLEL_THRESHOLD` 后按文档粒度并发切片，以减少大批量文档同时进入系统时的切分等待时间。
+
+当单次摄入的 chunk 数较多时，系统会按 `EMBEDDING_BATCH_SIZE` 分批，并在达到 `EMBEDDING_PARALLEL_THRESHOLD` 后以最多 `EMBEDDING_MAX_CONCURRENCY` 的并发度调用 embedding 接口，以提升大文档/大量切片的向量化速度。
 
 当前检索阶段会同时保留两类分数：
 

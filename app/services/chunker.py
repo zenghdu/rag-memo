@@ -1,5 +1,6 @@
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document as LCDocument
@@ -28,6 +29,30 @@ class Chunker:
             raise ValueError(f"Unsupported chunking strategy: {self.strategy}")
 
     def _split_recursive(self, documents: List[LCDocument]) -> List[LCDocument]:
+        if not documents:
+            return []
+
+        parallel_threshold = max(1, settings.chunking_parallel_threshold)
+        max_concurrency = max(1, settings.chunking_max_concurrency)
+
+        if len(documents) < parallel_threshold or max_concurrency == 1:
+            chunk_groups = [self._split_one_document(document) for document in documents]
+        else:
+            with ThreadPoolExecutor(max_workers=min(max_concurrency, len(documents))) as executor:
+                chunk_groups = list(executor.map(self._split_one_document, documents))
+
+        chunks: List[LCDocument] = []
+        chunk_index = 0
+        for group in chunk_groups:
+            for local_index, chunk in enumerate(group):
+                chunk.metadata["chunk_index"] = chunk_index
+                chunk.metadata["chunk_local_index"] = local_index
+                chunks.append(chunk)
+                chunk_index += 1
+
+        return chunks
+
+    def _split_one_document(self, document: LCDocument) -> List[LCDocument]:
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
@@ -35,26 +60,21 @@ class Chunker:
             add_start_index=True,
         )
 
-        chunks: List[LCDocument] = []
-        chunk_index = 0
-        for document in documents:
-            source_chunks = splitter.split_documents([document])
-            headings = self._extract_headings(document.page_content)
-            for local_index, chunk in enumerate(source_chunks):
-                start_index = int(chunk.metadata.get("start_index", 0) or 0)
-                section_info = self._resolve_section_info(headings, start_index)
-                chunk.metadata["chunk_index"] = chunk_index
-                chunk.metadata["chunk_local_index"] = local_index
-                chunk.metadata["source_start_index"] = start_index
-                chunk.metadata["document_title"] = chunk.metadata.get(
-                    "document_title",
-                    document.metadata.get("document_title") or document.metadata.get("filename", "unknown"),
-                )
-                chunk.metadata.update(section_info)
-                chunks.append(chunk)
-                chunk_index += 1
+        source_chunks = splitter.split_documents([document])
+        headings = self._extract_headings(document.page_content)
+        resolved_chunks: List[LCDocument] = []
+        for chunk in source_chunks:
+            start_index = int(chunk.metadata.get("start_index", 0) or 0)
+            section_info = self._resolve_section_info(headings, start_index)
+            chunk.metadata["source_start_index"] = start_index
+            chunk.metadata["document_title"] = chunk.metadata.get(
+                "document_title",
+                document.metadata.get("document_title") or document.metadata.get("filename", "unknown"),
+            )
+            chunk.metadata.update(section_info)
+            resolved_chunks.append(chunk)
 
-        return chunks
+        return resolved_chunks
 
     def _extract_headings(self, text: str) -> List[Dict[str, object]]:
         headings: List[Dict[str, object]] = []

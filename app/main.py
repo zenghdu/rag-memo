@@ -127,6 +127,15 @@ async def health():
         "status": "ok",
         "debug_mode": settings.debug_pipeline,
         "embedding_model": settings.embedding_model,
+        "embedding": {
+            "batch_size": settings.embedding_batch_size,
+            "max_concurrency": settings.embedding_max_concurrency,
+            "parallel_threshold": settings.embedding_parallel_threshold,
+        },
+        "chunking": {
+            "max_concurrency": settings.chunking_max_concurrency,
+            "parallel_threshold": settings.chunking_parallel_threshold,
+        },
         "llm_model": settings.llm_model,
         "mysql_uri": settings.mysql_uri.split("@")[-1],
         "milvus": {

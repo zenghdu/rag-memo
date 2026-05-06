@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple
 
 from langchain_core.documents import Document as LCDocument
@@ -103,7 +104,7 @@ class MilvusVectorStore:
 
         collection = self.ensure_collection()
         texts = [doc.page_content for doc in documents]
-        vectors = self.embeddings.embed_documents(texts)
+        vectors = self._embed_documents_parallel(texts)
 
         payload = [
             [int(doc.metadata.get("document_id", 0)) for doc in documents],
@@ -119,6 +120,40 @@ class MilvusVectorStore:
         result = collection.insert(payload)
         collection.flush()
         return [str(pk) for pk in result.primary_keys]
+
+    def _embed_documents_parallel(self, texts: List[str]) -> List[List[float]]:
+        if not texts:
+            return []
+
+        batch_size = max(1, settings.embedding_batch_size)
+        parallel_threshold = max(1, settings.embedding_parallel_threshold)
+        max_concurrency = max(1, settings.embedding_max_concurrency)
+
+        if len(texts) < parallel_threshold or max_concurrency == 1:
+            return self.embeddings.embed_documents(texts)
+
+        batches = [texts[i:i + batch_size] for i in range(0, len(texts), batch_size)]
+        vectors_by_batch: List[Optional[List[List[float]]]] = [None] * len(batches)
+
+        def embed_one(batch_index: int, batch_texts: List[str]) -> Tuple[int, List[List[float]]]:
+            batch_vectors = self.embeddings.embed_documents(batch_texts)
+            return batch_index, batch_vectors
+
+        with ThreadPoolExecutor(max_workers=min(max_concurrency, len(batches))) as executor:
+            futures = [
+                executor.submit(embed_one, batch_index, batch_texts)
+                for batch_index, batch_texts in enumerate(batches)
+            ]
+            for future in futures:
+                batch_index, batch_vectors = future.result()
+                vectors_by_batch[batch_index] = batch_vectors
+
+        vectors: List[List[float]] = []
+        for batch_vectors in vectors_by_batch:
+            if batch_vectors is None:
+                continue
+            vectors.extend(batch_vectors)
+        return vectors
 
     def delete_by_document_id(self, document_id: int) -> None:
         collection = self.ensure_collection()
