@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     embedding_model: str = "qwen/qwen3-embedding-8b"
     embedding_api_key: str = ""
     embedding_base_url: str = "https://api.openai.com/v1"
+    embedding_batch_size: int = 32
+    embedding_max_concurrency: int = 4
+    embedding_parallel_threshold: int = 64
 
     # ---- LLM ----
     llm_model: str = "qwen/qwen3-30b-a3b"
@@ -58,6 +61,8 @@ class Settings(BaseSettings):
     # ---- RAG ----
     chunk_size: int = 800
     chunk_overlap: int = 150
+    chunking_max_concurrency: int = 4
+    chunking_parallel_threshold: int = 8
     retriever_top_k: int = 5
 
 
