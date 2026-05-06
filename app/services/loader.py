@@ -2,17 +2,19 @@ from __future__ import annotations
 from pathlib import Path
 from typing import List, Optional
 import re
+import tempfile
 import fitz  # PyMuPDF
 from langchain_core.documents import Document as LCDocument
 
 from app.utils.ocr import ocr_from_bytes
+from app.utils.doc_convert import convert_doc_to_md
 from app.utils.logger import logger
 
 # 支持的文件类型
 SUPPORTED_PDF_EXTS = {".pdf"}
 SUPPORTED_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif", ".webp"}
-SUPPORTED_DOC_EXTS = {".docx", ".doc"} # 预留
-SUPPORTED_TEXT_EXTS = {".txt", ".md"} # 预留
+SUPPORTED_DOC_EXTS = {".docx", ".doc"}
+SUPPORTED_TEXT_EXTS = {".txt", ".md"}
 SUPPORTED_EXTS = SUPPORTED_PDF_EXTS | SUPPORTED_IMAGE_EXTS | SUPPORTED_DOC_EXTS | SUPPORTED_TEXT_EXTS
 
 class Loader:
@@ -30,6 +32,8 @@ class Loader:
             return self._load_pdf(file_path)
         elif ext in SUPPORTED_IMAGE_EXTS:
             return self._load_image(file_path)
+        elif ext in SUPPORTED_DOC_EXTS:
+            return self._load_doc(file_path)
         elif ext in SUPPORTED_TEXT_EXTS:
             return self._load_text(file_path)
         else:
@@ -93,6 +97,31 @@ class Loader:
                     "filename": image_path.name,
                     "parser": "rapidocr",
                     "file_type": "image",
+                    "document_title": document_title,
+                },
+            )
+        ]
+
+    def _load_doc(self, doc_path: Path) -> List[LCDocument]:
+        """加载 .doc / .docx 文件：先转为 Markdown 再读取内容。"""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            md_path = Path(tmp_dir) / (doc_path.stem + ".md")
+            logger.debug(f"Converting doc to markdown: {doc_path} -> {md_path}")
+            convert_doc_to_md(doc_path, md_path)
+            content = md_path.read_text(encoding="utf-8")
+
+        if not content.strip():
+            return []
+
+        document_title = self._infer_document_title(content, doc_path.stem)
+        return [
+            LCDocument(
+                page_content=content,
+                metadata={
+                    "source": str(doc_path),
+                    "filename": doc_path.name,
+                    "parser": "doc_to_md",
+                    "file_type": "doc",
                     "document_title": document_title,
                 },
             )
